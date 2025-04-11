@@ -178,22 +178,17 @@ def single_ply_analysis_module():
     Qbar = calculate_Qbar_matrix(Q, angle)
     Sbar = np.linalg.inv(Qbar)
     
-    with col2:
-        st.markdown("**Results**")
-        
-        display_matrix(Q, ['ε₁', 'ε₂', 'γ₁₂'], ['σ₁', 'σ₂', 'τ₁₂'], "Q Matrix (Stiffness)")
-        display_matrix(S, ['σ₁', 'σ₂', 'τ₁₂'], ['ε₁', 'ε₂', 'γ₁₂'], "S Matrix (Compliance)")
-    
-    st.subheader("Transformed Properties")
+    st.subheader("Stiffness and Compliance Matrices")
     
     col3, col4 = st.columns(2)
     
     with col3:
+        display_matrix(Q, ['ε₁', 'ε₂', 'γ₁₂'], ['σ₁', 'σ₂', 'τ₁₂'], "Q Matrix (Stiffness)")
         display_matrix(Qbar, ['εₓ', 'εᵧ', 'γₓᵧ'], ['σₓ', 'σᵧ', 'τₓᵧ'], "Q-bar Matrix (Transformed Stiffness)")
     
     with col4:
+        display_matrix(S, ['σ₁', 'σ₂', 'τ₁₂'], ['ε₁', 'ε₂', 'γ₁₂'], "S Matrix (Compliance)")
         display_matrix(Sbar, ['σₓ', 'σᵧ', 'τₓᵧ'], ['εₓ', 'εᵧ', 'γₓᵧ'], "S-bar Matrix (Transformed Compliance)")
-    
     # Calculate modulus in given direction
     Ex = 1/Sbar[0,0]
     Ey = 1/Sbar[1,1]
@@ -240,7 +235,8 @@ def single_ply_analysis_module():
             "σ₂/σᵧ (MPa)": [stress_xy[1], stress_12[1]],
             "τ₁₂/τₓᵧ (MPa)": [stress_xy[2], stress_12[2]]
         })
-        st.table(stress_df.style.format("{:.2f}"))
+        numeric_cols = ["σ₁/σₓ (MPa)", "σ₂/σᵧ (MPa)", "τ₁₂/τₓᵧ (MPa)"]
+        st.table(stress_df.style.format({col: "{:.2f}" for col in numeric_cols}))
     
     with col6:
         st.markdown("**Strains**")
@@ -250,7 +246,9 @@ def single_ply_analysis_module():
             "ε₂/εᵧ (μɛ)": [strain_xy[1]*1e6, strain_12[1]*1e6],
             "γ₁₂/γₓᵧ (μɛ)": [strain_xy[2]*1e6, strain_12[2]*1e6]
         })
-        st.table(strain_df.style.format("{:.2f}"))
+        numeric_cols = ["ε₁/εₓ (μɛ)", "ε₂/εᵧ (μɛ)", "γ₁₂/γₓᵧ (μɛ)"]
+        st.table(strain_df.style.format({col: "{:.2f}" for col in numeric_cols}))
+
 
 # Laminate Analysis Module
 def laminate_analysis_module():
@@ -345,17 +343,22 @@ def laminate_analysis_module():
     
     with col4:
         display_matrix(D, ['κx', 'κy', 'κxy'], ['Mx', 'My', 'Mxy'], "D Matrix (Bending Stiffness)")
-        display_matrix(ABD, 
+        
+    
+    # Display ABD matrix
+    st.subheader("ABD Matrix")
+    display_matrix(ABD, 
                       ['εx', 'εy', 'γxy', 'κx', 'κy', 'κxy'], 
                       ['Nx', 'Ny', 'Nxy', 'Mx', 'My', 'Mxy'], 
-                      "Full ABD Matrix")
-    
+                      "ABD Matrix"
+                      )
     # Display ABD inverse matrix
     st.subheader("ABD Inverse Matrix")
     display_matrix(ABD_inv,
                   ['Nx', 'Ny', 'Nxy', 'Mx', 'My', 'Mxy'],
                   ['εx', 'εy', 'γxy', 'κx', 'κy', 'κxy'],
-                  "ABD⁻¹ Matrix")
+                  "ABD Inverse Matrix"
+                  )
     
     st.subheader("Load Application and Response")
     
@@ -437,6 +440,198 @@ def laminate_analysis_module():
         st.dataframe(pd.DataFrame(ply_results))
 
 # Failure Prediction Module
+# def failure_prediction_module():
+#     st.header("4. Failure Prediction")
+    
+#     if 'composite_props' not in st.session_state or st.session_state.composite_props is None or 'laminate_layers' not in st.session_state:
+#         st.warning("Please define material properties and laminate first.")
+#         return
+    
+#     props = st.session_state.composite_props
+#     E1, E2, G12, nu12 = props['E1'], props['E2'], props['G12'], props['nu12']
+    
+#     st.subheader("Material Strength Properties")
+    
+#     col1, col2 = st.columns(2)
+    
+#     with col1:
+#         Xt = st.number_input("Longitudinal Tensile Strength (MPa)", value=1500.0)
+#         Xc = st.number_input("Longitudinal Compressive Strength (MPa)", value=1200.0)
+    
+#     with col2:
+#         Yt = st.number_input("Transverse Tensile Strength (MPa)", value=50.0)
+#         Yc = st.number_input("Transverse Compressive Strength (MPa)", value=200.0)
+#         S = st.number_input("In-plane Shear Strength (MPa)", value=70.0)
+    
+#     st.subheader("Load Application")
+    
+#     col3, col4 = st.columns(2)
+    
+#     with col3:
+#         st.markdown("**Mechanical Loads**")
+#         Nx = st.number_input("Applied Nx (N/mm)", value=0.0, key="fail_Nx")
+#         Ny = st.number_input("Applied Ny (N/mm)", value=0.0, key="fail_Ny")
+#         Nxy = st.number_input("Applied Nxy (N/mm)", value=0.0, key="fail_Nxy")
+    
+#     with col4:
+#         st.markdown("**Moment Loads**")
+#         Mx = st.number_input("Applied Mx (N)", value=0.0, key="fail_Mx")
+#         My = st.number_input("Applied My (N)", value=0.0, key="fail_My")
+#         Mxy = st.number_input("Applied Mxy (N)", value=0.0, key="fail_Mxy")
+    
+#     if st.button("Predict Failure"):
+#         # First calculate ABD matrices (same as in laminate analysis)
+#         Q = calculate_Q_matrix(E1, E2, nu12, G12)
+        
+#         total_thickness = sum(ply['thickness'] for ply in st.session_state.laminate_layers)
+#         z_locations = [ -total_thickness/2 ]
+        
+#         for ply in st.session_state.laminate_layers:
+#             z_locations.append(z_locations[-1] + ply['thickness'])
+        
+#         A = np.zeros((3,3))
+#         B = np.zeros((3,3))
+#         D = np.zeros((3,3))
+        
+#         for i, ply in enumerate(st.session_state.laminate_layers):
+#             angle = ply['angle']
+#             thickness = ply['thickness']
+#             z_bottom = z_locations[i]
+#             z_top = z_locations[i+1]
+#             z_mid = (z_bottom + z_top)/2
+            
+#             Qbar = calculate_Qbar_matrix(Q, angle)
+            
+#             A += Qbar * thickness
+#             B += Qbar * thickness * z_mid
+#             D += Qbar * (thickness * z_mid**2 + thickness**3 / 12)
+        
+#         ABD = np.vstack([
+#             np.hstack([A, B]),
+#             np.hstack([B, D])
+#         ])
+        
+#         ABD_inv = np.linalg.inv(ABD)
+        
+#         # Calculate mid-plane strains and curvatures
+#         forces_moments = np.array([Nx, Ny, Nxy, Mx, My, Mxy])
+#         result = ABD_inv.dot(forces_moments)
+#         epsilon0 = result[:3]
+#         kappa = result[3:]
+        
+#         # Calculate failure indices for each ply
+#         # Calculate failure indices for each ply
+#     failure_results = []
+#     failed_plies = []
+
+#     for i, ply in enumerate(st.session_state.laminate_layers):
+#         angle = ply['angle']
+#         z_bottom = z_locations[i]
+#         z_top = z_locations[i+1]
+
+#         Qbar = calculate_Qbar_matrix(Q, angle)
+
+#         # Calculate transformation matrix
+#         theta = np.radians(angle)
+#         m = np.cos(theta)
+#         n = np.sin(theta)
+
+#         T = np.array([
+#             [m**2, n**2, 2*m*n],
+#             [n**2, m**2, -2*m*n],
+#             [-m*n, m*n, m**2-n**2]
+#         ])
+
+#         # Calculate at critical locations (top and bottom of each ply)
+#         for z_pos, location in zip([z_bottom, z_top], ['Bottom', 'Top']):
+#             # Strains in x-y coordinates
+#             strain_xy = epsilon0 + z_pos * kappa
+
+#             # Stresses in x-y coordinates
+#             stress_xy = Qbar.dot(strain_xy)
+
+#             # Stresses in material coordinates
+#             stress_12 = T.dot(stress_xy)
+#             sigma1, sigma2, tau12 = stress_12
+
+#             # Maximum Stress Criterion only
+#             R1t = Xt/sigma1 if sigma1 > 0 else -Xc/sigma1
+#             R2t = Yt/sigma2 if sigma2 > 0 else -Yc/sigma2
+#             R12 = S/abs(tau12)
+#             max_stress_R = min(R1t, R2t, R12)
+#             max_stress_mode = ["Fiber", "Matrix", "Shear"][np.argmin([R1t, R2t, R12])]
+
+#             failure_status = "Will Fail" if max_stress_R < 1.0 else "Safe"
+
+#             if max_stress_R < 1.0:
+#                 failed_plies.append({
+#                     'Ply': i+1,
+#                     'Location': location,
+#                     'Failure Mode': max_stress_mode,
+#                     'Safety Factor': f"{max_stress_R:.4f}"
+#                 })
+
+#             failure_results.append({
+#                 'Ply': i+1,
+#                 'Angle': angle,
+#                 'Location': location,
+#                 'σ1 (MPa)': f"{sigma1:.2f}",
+#                 'σ2 (MPa)': f"{sigma2:.2f}",
+#                 'τ12 (MPa)': f"{tau12:.2f}",
+#                 'Max Stress R': f"{max_stress_R:.4f}",
+#                 'Failure Mode': max_stress_mode,
+#                 'Status': failure_status
+#             })
+
+#     st.subheader("Failure Analysis Results (Maximum Stress Criterion)")
+#     st.dataframe(pd.DataFrame(failure_results))
+
+#     if failed_plies:
+#         st.subheader("All Plies That Will Fail")
+#         st.dataframe(pd.DataFrame(failed_plies))
+
+#         # Visualize failure locations
+#         st.subheader("Failure Visualization")
+
+#         # Create a plot showing the laminate stack with failed plies highlighted
+#         fig, ax = plt.subplots(figsize=(10, 6))
+
+#         # Plot laminate stack
+#         total_thickness = sum(ply['thickness'] for ply in st.session_state.laminate_layers)
+#         current_z = -total_thickness/2
+
+#         for i, ply in enumerate(st.session_state.laminate_layers):
+#             thickness = ply['thickness']
+#             angle = ply['angle']
+
+#             # Check if this ply has any failures
+#             ply_failures = [fp for fp in failed_plies if fp['Ply'] == i+1]
+
+#             # Color based on failure status
+#             color = 'red' if ply_failures else 'green'
+
+#             # Draw the ply
+#             rect = plt.Rectangle((0, current_z), 1, thickness, 
+#                                 linewidth=1, edgecolor='black', 
+#                                 facecolor=color, alpha=0.5)
+#             ax.add_patch(rect)
+
+#             # Add ply info
+#             plt.text(0.5, current_z + thickness/2, 
+#                     f"Ply {i+1}\n{angle}°\n{thickness}mm", 
+#                     ha='center', va='center')
+
+#             current_z += thickness
+
+#         ax.set_xlim(0, 1)
+#         ax.set_ylim(-total_thickness/2, total_thickness/2)
+#         ax.set_title('Laminate Stack (Red = Failed, Green = Safe)')
+#         ax.set_ylabel('Position through thickness (mm)')
+#         ax.set_xticks([])
+#         st.pyplot(fig)
+
+#     else:
+#         st.success("All plies are safe according to Maximum Stress Criterion")
 def failure_prediction_module():
     st.header("4. Failure Prediction")
     
@@ -477,15 +672,17 @@ def failure_prediction_module():
         Mxy = st.number_input("Applied Mxy (N)", value=0.0, key="fail_Mxy")
     
     if st.button("Predict Failure"):
-        # First calculate ABD matrices (same as in laminate analysis)
+        # First calculate ABD matrices
         Q = calculate_Q_matrix(E1, E2, nu12, G12)
         
+        # Calculate total thickness and ply positions
         total_thickness = sum(ply['thickness'] for ply in st.session_state.laminate_layers)
-        z_locations = [ -total_thickness/2 ]
+        z_locations = [ -total_thickness/2 ]  # Start at bottom
         
         for ply in st.session_state.laminate_layers:
             z_locations.append(z_locations[-1] + ply['thickness'])
         
+        # Initialize ABD matrices
         A = np.zeros((3,3))
         B = np.zeros((3,3))
         D = np.zeros((3,3))
@@ -518,9 +715,11 @@ def failure_prediction_module():
         
         # Calculate failure indices for each ply
         failure_results = []
+        failed_plies = []
         
         for i, ply in enumerate(st.session_state.laminate_layers):
             angle = ply['angle']
+            thickness = ply['thickness']
             z_bottom = z_locations[i]
             z_top = z_locations[i+1]
             
@@ -556,18 +755,19 @@ def failure_prediction_module():
                 max_stress_R = min(R1t, R2t, R12)
                 max_stress_mode = ["Fiber", "Matrix", "Shear"][np.argmin([R1t, R2t, R12])]
                 
-                # Tsai-Wu Criterion
-                F1 = 1/Xt - 1/Xc
-                F2 = 1/Yt - 1/Yc
-                F11 = 1/(Xt*Xc)
-                F22 = 1/(Yt*Yc)
-                F66 = 1/S**2
-                F12 = -0.5 * np.sqrt(F11*F22)
+                failure_status = "Will Fail" if max_stress_R < 1.0 else "Safe"
                 
-                a = F11*sigma1**2 + F22*sigma2**2 + F66*tau12**2 + 2*F12*sigma1*sigma2
-                b = F1*sigma1 + F2*sigma2
-                discriminant = b**2 + 4*a
-                tsai_wu_R = (-b + np.sqrt(discriminant)) / (2*a)
+                if max_stress_R < 1.0:
+                    failed_plies.append({
+                        'Ply': i+1,
+                        'Angle': angle,
+                        'Location': location,
+                        'Failure Mode': max_stress_mode,
+                        'Safety Factor': f"{max_stress_R:.4f}",
+                        'σ1 (MPa)': f"{sigma1:.2f}",
+                        'σ2 (MPa)': f"{sigma2:.2f}",
+                        'τ12 (MPa)': f"{tau12:.2f}"
+                    })
                 
                 failure_results.append({
                     'Ply': i+1,
@@ -576,39 +776,60 @@ def failure_prediction_module():
                     'σ1 (MPa)': f"{sigma1:.2f}",
                     'σ2 (MPa)': f"{sigma2:.2f}",
                     'τ12 (MPa)': f"{tau12:.2f}",
-                    'Max Stress R': f"{max_stress_R:.2f}",
-                    'Max Stress Mode': max_stress_mode,
-                    'Tsai-Wu R': f"{tsai_wu_R:.2f}"
+                    'Max Stress R': f"{max_stress_R:.4f}",
+                    'Failure Mode': max_stress_mode,
+                    'Status': failure_status
                 })
-        
-        st.subheader("Failure Analysis Results")
+
+        st.subheader("Failure Analysis Results (Maximum Stress Criterion)")
         st.dataframe(pd.DataFrame(failure_results))
         
-        # Determine first ply failure
-        max_stress_R_values = [float(x['Max Stress R']) for x in failure_results]
-        tsai_wu_R_values = [float(x['Tsai-Wu R']) for x in failure_results]
+        if failed_plies:
+            st.subheader("All Plies That Will Fail")
+            st.dataframe(pd.DataFrame(failed_plies))
+            
+            # Visualize failure locations
+            st.subheader("Failure Visualization")
+            
+            # Create a plot showing the laminate stack with failed plies highlighted
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Plot laminate stack
+            current_z = -total_thickness/2
+            
+            for i, ply in enumerate(st.session_state.laminate_layers):
+                thickness = ply['thickness']
+                angle = ply['angle']
+                
+                # Check if this ply has any failures
+                ply_failures = [fp for fp in failed_plies if fp['Ply'] == i+1]
+                
+                # Color based on failure status
+                color = 'red' if ply_failures else 'green'
+                
+                # Draw the ply
+                rect = plt.Rectangle((0, current_z), 1, thickness, 
+                                    linewidth=1, edgecolor='black', 
+                                    facecolor=color, alpha=0.5)
+                ax.add_patch(rect)
+                
+                # Add ply info
+                plt.text(0.5, current_z + thickness/2, 
+                        f"Ply {i+1}\n{angle}°\n{thickness}mm", 
+                        ha='center', va='center', fontsize=8)
+                
+                current_z += thickness
+            
+            ax.set_xlim(0, 1)
+            ax.set_ylim(-total_thickness/2, total_thickness/2)
+            ax.set_title('Laminate Stack (Red = Failed, Green = Safe)')
+            ax.set_ylabel('Position through thickness (mm)')
+            ax.set_xticks([])
+            st.pyplot(fig)
+            
+        else:
+            st.success("All plies are safe according to Maximum Stress Criterion")
         
-        first_ply_max_stress = np.argmin(max_stress_R_values)
-        first_ply_tsai_wu = np.argmin(tsai_wu_R_values)
-        
-        st.subheader("First Ply Failure Prediction")
-        
-        col5, col6 = st.columns(2)
-        
-        with col5:
-            st.markdown("**Maximum Stress Criterion**")
-            st.markdown(f"""
-            - **First ply to fail**: Ply {failure_results[first_ply_max_stress]['Ply']} {failure_results[first_ply_max_stress]['Location']}
-            - **Failure mode**: {failure_results[first_ply_max_stress]['Max Stress Mode']}
-            - **Load multiplier (R)**: {failure_results[first_ply_max_stress]['Max Stress R']}
-            """)
-        
-        # with col6:
-        #     st.markdown("**Tsai-Wu Criterion**")
-        #     st.markdown(f"""
-        #     - **First ply to fail**: Ply {failure_results[first_ply_tsai_wu]['Ply']} {failure_results[first_ply_tsai_wu]['Location']}
-        #     - **Load multiplier (R)**: {failure_results[first_ply_tsai_wu]['Tsai-Wu R']}
-        #     """)
 
 # Main app logic
 if app_mode == "Material Properties":
