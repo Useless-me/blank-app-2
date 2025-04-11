@@ -603,12 +603,12 @@ def failure_prediction_module():
             - **Load multiplier (R)**: {failure_results[first_ply_max_stress]['Max Stress R']}
             """)
         
-        with col6:
-            st.markdown("**Tsai-Wu Criterion**")
-            st.markdown(f"""
-            - **First ply to fail**: Ply {failure_results[first_ply_tsai_wu]['Ply']} {failure_results[first_ply_tsai_wu]['Location']}
-            - **Load multiplier (R)**: {failure_results[first_ply_tsai_wu]['Tsai-Wu R']}
-            """)
+        # with col6:
+        #     st.markdown("**Tsai-Wu Criterion**")
+        #     st.markdown(f"""
+        #     - **First ply to fail**: Ply {failure_results[first_ply_tsai_wu]['Ply']} {failure_results[first_ply_tsai_wu]['Location']}
+        #     - **Load multiplier (R)**: {failure_results[first_ply_tsai_wu]['Tsai-Wu R']}
+        #     """)
 
 # Main app logic
 if app_mode == "Material Properties":
