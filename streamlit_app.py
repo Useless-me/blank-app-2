@@ -19,6 +19,8 @@ st.markdown("""
     h1 {color: #2a5c9a;}
     h2 {color: #3a7ca5;}
     .sidebar .sidebar-content {background-color: #f8f9fa;}
+    .matrix-table {font-size: 0.85rem;}
+    .stDataFrame {width: 100%;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,9 +43,60 @@ app_mode = st.sidebar.radio("Select Analysis Mode", [
     "Failure Prediction"
 ])
 
-# Initialize session state for storing laminate layers
+# Initialize session state for storing data
 if 'laminate_layers' not in st.session_state:
     st.session_state.laminate_layers = []
+
+if 'composite_props' not in st.session_state:
+    st.session_state.composite_props = None
+
+# Helper functions
+def calculate_Q_matrix(E1, E2, nu12, G12):
+    """Calculate stiffness matrix Q"""
+    nu21 = nu12 * E2 / E1
+    Q = np.array([
+        [E1/(1-nu12*nu21), nu12*E2/(1-nu12*nu21), 0],
+        [nu12*E2/(1-nu12*nu21), E2/(1-nu12*nu21), 0],
+        [0, 0, G12]
+    ])
+    return Q
+
+def calculate_S_matrix(E1, E2, nu12, G12):
+    """Calculate compliance matrix S"""
+    nu21 = nu12 * E2 / E1
+    S = np.array([
+        [1/E1, -nu21/E2, 0],
+        [-nu12/E1, 1/E2, 0],
+        [0, 0, 1/G12]
+    ])
+    return S
+
+def calculate_Qbar_matrix(Q, angle):
+    """Calculate transformed stiffness matrix Qbar"""
+    theta = np.radians(angle)
+    m = np.cos(theta)
+    n = np.sin(theta)
+    
+    T = np.array([
+        [m**2, n**2, 2*m*n],
+        [n**2, m**2, -2*m*n],
+        [-m*n, m*n, m**2-n**2]
+    ])
+    
+    Tinv = np.array([
+        [m**2, n**2, -2*m*n],
+        [n**2, m**2, 2*m*n],
+        [m*n, -m*n, m**2-n**2]
+    ])
+    
+    Qbar = np.linalg.inv(T).dot(Q).dot(Tinv)
+    return Qbar
+
+def display_matrix(matrix, row_labels, col_labels, title):
+    """Helper function to display matrices with custom formatting"""
+    df = pd.DataFrame(matrix, columns=col_labels, index=row_labels)
+    st.markdown(f"**{title}**")
+    st.dataframe(df.style.format("{:.4e}"), use_container_width=True)
 
 # Material Properties Module
 def material_properties_module():
@@ -100,7 +153,7 @@ def material_properties_module():
 def single_ply_analysis_module():
     st.header("2. Single Ply Analysis")
     
-    if 'composite_props' not in st.session_state:
+    if 'composite_props' not in st.session_state or st.session_state.composite_props is None:
         st.warning("Please calculate composite properties first in the Material Properties section.")
         return
     
@@ -120,59 +173,26 @@ def single_ply_analysis_module():
         tau_xy = st.number_input("Applied Shear Stress τₓᵧ (MPa)", value=0.0)
     
     # Calculate Q and S matrices
-    nu21 = nu12 * E2 / E1
-    Q = np.array([
-        [E1/(1-nu12*nu21), nu12*E2/(1-nu12*nu21), 0],
-        [nu12*E2/(1-nu12*nu21), E2/(1-nu12*nu21), 0],
-        [0, 0, G12]
-    ])
-    
-    S = np.array([
-        [1/E1, -nu21/E2, 0],
-        [-nu12/E1, 1/E2, 0],
-        [0, 0, 1/G12]
-    ])
-    
-    # Calculate transformed matrices
-    theta = np.radians(angle)
-    m = np.cos(theta)
-    n = np.sin(theta)
-    
-    T = np.array([
-        [m**2, n**2, 2*m*n],
-        [n**2, m**2, -2*m*n],
-        [-m*n, m*n, m**2-n**2]
-    ])
-    
-    Tinv = np.array([
-        [m**2, n**2, -2*m*n],
-        [n**2, m**2, 2*m*n],
-        [m*n, -m*n, m**2-n**2]
-    ])
-    
-    Qbar = np.linalg.inv(T).dot(Q).dot(Tinv)
+    Q = calculate_Q_matrix(E1, E2, nu12, G12)
+    S = calculate_S_matrix(E1, E2, nu12, G12)
+    Qbar = calculate_Qbar_matrix(Q, angle)
     Sbar = np.linalg.inv(Qbar)
     
     with col2:
         st.markdown("**Results**")
         
-        st.markdown("**Q Matrix (Stiffness)**")
-        st.dataframe(pd.DataFrame(Q, columns=['σ₁', 'σ₂', 'τ₁₂'], index=['ε₁', 'ε₂', 'γ₁₂']))
-        
-        st.markdown("**S Matrix (Compliance)**")
-        st.dataframe(pd.DataFrame(S, columns=['ε₁', 'ε₂', 'γ₁₂'], index=['σ₁', 'σ₂', 'τ₁₂']))
+        display_matrix(Q, ['ε₁', 'ε₂', 'γ₁₂'], ['σ₁', 'σ₂', 'τ₁₂'], "Q Matrix (Stiffness)")
+        display_matrix(S, ['σ₁', 'σ₂', 'τ₁₂'], ['ε₁', 'ε₂', 'γ₁₂'], "S Matrix (Compliance)")
     
     st.subheader("Transformed Properties")
     
     col3, col4 = st.columns(2)
     
     with col3:
-        st.markdown("**Q-bar Matrix (Transformed Stiffness)**")
-        st.dataframe(pd.DataFrame(Qbar, columns=['σₓ', 'σᵧ', 'τₓᵧ'], index=['εₓ', 'εᵧ', 'γₓᵧ']))
+        display_matrix(Qbar, ['εₓ', 'εᵧ', 'γₓᵧ'], ['σₓ', 'σᵧ', 'τₓᵧ'], "Q-bar Matrix (Transformed Stiffness)")
     
     with col4:
-        st.markdown("**S-bar Matrix (Transformed Compliance)**")
-        st.dataframe(pd.DataFrame(Sbar, columns=['εₓ', 'εᵧ', 'γₓᵧ'], index=['σₓ', 'σᵧ', 'τₓᵧ']))
+        display_matrix(Sbar, ['σₓ', 'σᵧ', 'τₓᵧ'], ['εₓ', 'εᵧ', 'γₓᵧ'], "S-bar Matrix (Transformed Compliance)")
     
     # Calculate modulus in given direction
     Ex = 1/Sbar[0,0]
@@ -191,6 +211,16 @@ def single_ply_analysis_module():
     st.subheader("Stress/Strain Transformations")
     
     # Transform applied stresses to material coordinates
+    theta = np.radians(angle)
+    m = np.cos(theta)
+    n = np.sin(theta)
+    
+    T = np.array([
+        [m**2, n**2, 2*m*n],
+        [n**2, m**2, -2*m*n],
+        [-m*n, m*n, m**2-n**2]
+    ])
+    
     stress_xy = np.array([sigma_xx, sigma_yy, tau_xy])
     stress_12 = T.dot(stress_xy)
     
@@ -210,7 +240,7 @@ def single_ply_analysis_module():
             "σ₂/σᵧ (MPa)": [stress_xy[1], stress_12[1]],
             "τ₁₂/τₓᵧ (MPa)": [stress_xy[2], stress_12[2]]
         })
-        st.table(stress_df)
+        st.table(stress_df.style.format("{:.2f}"))
     
     with col6:
         st.markdown("**Strains**")
@@ -220,13 +250,13 @@ def single_ply_analysis_module():
             "ε₂/εᵧ (μɛ)": [strain_xy[1]*1e6, strain_12[1]*1e6],
             "γ₁₂/γₓᵧ (μɛ)": [strain_xy[2]*1e6, strain_12[2]*1e6]
         })
-        st.table(strain_df)
+        st.table(strain_df.style.format("{:.2f}"))
 
 # Laminate Analysis Module
 def laminate_analysis_module():
     st.header("3. Laminate Analysis")
     
-    if 'composite_props' not in st.session_state:
+    if 'composite_props' not in st.session_state or st.session_state.composite_props is None:
         st.warning("Please calculate composite properties first in the Material Properties section.")
         return
     
@@ -269,12 +299,7 @@ def laminate_analysis_module():
     st.subheader("Laminate Analysis")
     
     # Calculate ABD matrices
-    nu21 = nu12 * E2 / E1
-    Q = np.array([
-        [E1/(1-nu12*nu21), nu12*E2/(1-nu12*nu21), 0],
-        [nu12*E2/(1-nu12*nu21), E2/(1-nu12*nu21), 0],
-        [0, 0, G12]
-    ])
+    Q = calculate_Q_matrix(E1, E2, nu12, G12)
     
     # Calculate total thickness and ply positions
     total_thickness = sum(ply['thickness'] for ply in st.session_state.laminate_layers)
@@ -295,24 +320,7 @@ def laminate_analysis_module():
         z_top = z_locations[i+1]
         z_mid = (z_bottom + z_top)/2
         
-        # Calculate Qbar for this ply
-        theta = np.radians(angle)
-        m = np.cos(theta)
-        n = np.sin(theta)
-        
-        T = np.array([
-            [m**2, n**2, 2*m*n],
-            [n**2, m**2, -2*m*n],
-            [-m*n, m*n, m**2-n**2]
-        ])
-        
-        Tinv = np.array([
-            [m**2, n**2, -2*m*n],
-            [n**2, m**2, 2*m*n],
-            [m*n, -m*n, m**2-n**2]
-        ])
-        
-        Qbar = np.linalg.inv(T).dot(Q).dot(Tinv)
+        Qbar = calculate_Qbar_matrix(Q, angle)
         
         # Add to ABD matrices
         A += Qbar * thickness
@@ -326,21 +334,28 @@ def laminate_analysis_module():
     
     ABD_inv = np.linalg.inv(ABD)
     
+    # Display ABD matrices
+    st.subheader("ABD Matrices")
+    
     col3, col4 = st.columns(2)
     
     with col3:
-        st.markdown("**A Matrix (Extensional Stiffness)**")
-        st.dataframe(pd.DataFrame(A, columns=['Nx', 'Ny', 'Nxy'], index=['εx', 'εy', 'γxy']))
-        
-        st.markdown("**B Matrix (Coupling Stiffness)**")
-        st.dataframe(pd.DataFrame(B, columns=['Mx', 'My', 'Mxy'], index=['εx', 'εy', 'γxy']))
+        display_matrix(A, ['εx', 'εy', 'γxy'], ['Nx', 'Ny', 'Nxy'], "A Matrix (Extensional Stiffness)")
+        display_matrix(B, ['εx', 'εy', 'γxy'], ['Mx', 'My', 'Mxy'], "B Matrix (Coupling Stiffness)")
     
     with col4:
-        st.markdown("**D Matrix (Bending Stiffness)**")
-        st.dataframe(pd.DataFrame(D, columns=['Mx', 'My', 'Mxy'], index=['κx', 'κy', 'κxy']))
-        
-        st.markdown("**ABD Matrix (Combined)**")
-        st.dataframe(pd.DataFrame(ABD))
+        display_matrix(D, ['κx', 'κy', 'κxy'], ['Mx', 'My', 'Mxy'], "D Matrix (Bending Stiffness)")
+        display_matrix(ABD, 
+                      ['εx', 'εy', 'γxy', 'κx', 'κy', 'κxy'], 
+                      ['Nx', 'Ny', 'Nxy', 'Mx', 'My', 'Mxy'], 
+                      "Full ABD Matrix")
+    
+    # Display ABD inverse matrix
+    st.subheader("ABD Inverse Matrix")
+    display_matrix(ABD_inv,
+                  ['Nx', 'Ny', 'Nxy', 'Mx', 'My', 'Mxy'],
+                  ['εx', 'εy', 'γxy', 'κx', 'κy', 'κxy'],
+                  "ABD⁻¹ Matrix")
     
     st.subheader("Load Application and Response")
     
@@ -382,7 +397,9 @@ def laminate_analysis_module():
             z_bottom = z_locations[i]
             z_top = z_locations[i+1]
             
-            # Calculate Qbar for this ply
+            Qbar = calculate_Qbar_matrix(Q, angle)
+            
+            # Calculate transformation matrix
             theta = np.radians(angle)
             m = np.cos(theta)
             n = np.sin(theta)
@@ -392,14 +409,6 @@ def laminate_analysis_module():
                 [n**2, m**2, -2*m*n],
                 [-m*n, m*n, m**2-n**2]
             ])
-            
-            Tinv = np.array([
-                [m**2, n**2, -2*m*n],
-                [n**2, m**2, 2*m*n],
-                [m*n, -m*n, m**2-n**2]
-            ])
-            
-            Qbar = np.linalg.inv(T).dot(Q).dot(Tinv)
             
             # Calculate at top, middle, and bottom of ply
             for z_pos, location in zip([z_bottom, (z_bottom+z_top)/2, z_top], ['Bottom', 'Middle', 'Top']):
@@ -431,7 +440,7 @@ def laminate_analysis_module():
 def failure_prediction_module():
     st.header("4. Failure Prediction")
     
-    if 'composite_props' not in st.session_state or 'laminate_layers' not in st.session_state:
+    if 'composite_props' not in st.session_state or st.session_state.composite_props is None or 'laminate_layers' not in st.session_state:
         st.warning("Please define material properties and laminate first.")
         return
     
@@ -469,12 +478,7 @@ def failure_prediction_module():
     
     if st.button("Predict Failure"):
         # First calculate ABD matrices (same as in laminate analysis)
-        nu21 = nu12 * E2 / E1
-        Q = np.array([
-            [E1/(1-nu12*nu21), nu12*E2/(1-nu12*nu21), 0],
-            [nu12*E2/(1-nu12*nu21), E2/(1-nu12*nu21), 0],
-            [0, 0, G12]
-        ])
+        Q = calculate_Q_matrix(E1, E2, nu12, G12)
         
         total_thickness = sum(ply['thickness'] for ply in st.session_state.laminate_layers)
         z_locations = [ -total_thickness/2 ]
@@ -493,23 +497,7 @@ def failure_prediction_module():
             z_top = z_locations[i+1]
             z_mid = (z_bottom + z_top)/2
             
-            theta = np.radians(angle)
-            m = np.cos(theta)
-            n = np.sin(theta)
-            
-            T = np.array([
-                [m**2, n**2, 2*m*n],
-                [n**2, m**2, -2*m*n],
-                [-m*n, m*n, m**2-n**2]
-            ])
-            
-            Tinv = np.array([
-                [m**2, n**2, -2*m*n],
-                [n**2, m**2, 2*m*n],
-                [m*n, -m*n, m**2-n**2]
-            ])
-            
-            Qbar = np.linalg.inv(T).dot(Q).dot(Tinv)
+            Qbar = calculate_Qbar_matrix(Q, angle)
             
             A += Qbar * thickness
             B += Qbar * thickness * z_mid
@@ -536,7 +524,9 @@ def failure_prediction_module():
             z_bottom = z_locations[i]
             z_top = z_locations[i+1]
             
-            # Calculate Qbar for this ply
+            Qbar = calculate_Qbar_matrix(Q, angle)
+            
+            # Calculate transformation matrix
             theta = np.radians(angle)
             m = np.cos(theta)
             n = np.sin(theta)
